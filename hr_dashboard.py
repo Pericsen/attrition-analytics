@@ -6,6 +6,21 @@ from plotly.subplots import make_subplots
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import plotly.io as pio
+
+# Configurar tema global para todos los plots
+pio.templates["anthropic"] = {
+    'layout': {
+        'colorway': ['#D4A574', '#5A8FC8', '#5AC86F', '#C85A5A', '#C8905A', '#8F5AC8'],
+        'paper_bgcolor': '#F5F2E8',  # Fondo coincide con tu tema
+        'plot_bgcolor': '#FFFCF7',   # Fondo del área de ploteo
+        'font': {'color': '#4A453E'}, # Color del texto
+        'title': {'font': {'color': '#4A453E', 'size': 16}, 'x': 0.5},
+        'xaxis': {'gridcolor': '#E8E2D5', 'linecolor': '#4A453E'},
+        'yaxis': {'gridcolor': '#E8E2D5', 'linecolor': '#4A453E'},
+    }
+}
+pio.templates.default = "anthropic"
 
 # Configuración de la página
 st.set_page_config(
@@ -15,9 +30,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-
 # Título principal
-st.title("📊 Dashboard de Análisis de Recursos Humanos")
+st.title("Dashboard de Análisis de Recursos Humanos - Attrition")
 st.markdown("---")
 
 df = pd.read_csv("./data/HR_Analytics.csv")
@@ -29,58 +43,65 @@ df['Age_Group'] = pd.cut(df['Age'], bins=[0, 30, 40, 50, 100],
 df['Income_Group'] = pd.cut(df['MonthlyIncome'], bins=5, precision=0)
 
 # Sidebar para filtros
-st.sidebar.header("🔍 Filtros")
+st.sidebar.header("Filtros")
 
-# Filtros dinámicos basados en las columnas del dataset
-# Filtros categóricos
+# Filtros categóricos con dropdown
 st.sidebar.subheader("Variables Categóricas")
 
 departments = st.sidebar.multiselect(
     "Departamentos:",
     options=sorted(df['Department'].unique()),
-    default=sorted(df['Department'].unique())
+    default=sorted(df['Department'].unique()),
+    help="Selecciona uno o más departamentos"
 )
 
 job_roles = st.sidebar.multiselect(
     "Roles de Trabajo:",
     options=sorted(df['JobRole'].unique()),
-    default=sorted(df['JobRole'].unique())
+    default=sorted(df['JobRole'].unique()),
+    help="Selecciona uno o más roles de trabajo"
 )
 
 genders = st.sidebar.multiselect(
     "Género:",
     options=sorted(df['Gender'].unique()),
-    default=sorted(df['Gender'].unique())
+    default=sorted(df['Gender'].unique()),
+    help="Selecciona género"
 )
 
 marital_status = st.sidebar.multiselect(
     "Estado Civil:",
     options=sorted(df['MaritalStatus'].unique()),
-    default=sorted(df['MaritalStatus'].unique())
+    default=sorted(df['MaritalStatus'].unique()),
+    help="Selecciona estado civil"
 )
 
 education_fields = st.sidebar.multiselect(
     "Campo de Educación:",
     options=sorted(df['EducationField'].unique()),
-    default=sorted(df['EducationField'].unique())
+    default=sorted(df['EducationField'].unique()),
+    help="Selecciona campo de educación"
 )
 
 business_travel = st.sidebar.multiselect(
     "Viajes de Trabajo:",
     options=sorted(df['BusinessTravel'].unique()),
-    default=sorted(df['BusinessTravel'].unique())
+    default=sorted(df['BusinessTravel'].unique()),
+    help="Selecciona frecuencia de viajes"
 )
 
 overtime = st.sidebar.multiselect(
     "Horas Extra:",
     options=sorted(df['OverTime'].unique()),
-    default=sorted(df['OverTime'].unique())
+    default=sorted(df['OverTime'].unique()),
+    help="Selecciona si trabajan horas extra"
 )
 
 attrition = st.sidebar.multiselect(
     "Attrition:",
     options=sorted(df['Attrition'].unique()),
-    default=sorted(df['Attrition'].unique())
+    default=sorted(df['Attrition'].unique()),
+    help="Selecciona estatus de attrition"
 )
 
 # Filtros numéricos
@@ -90,20 +111,22 @@ age_range = st.sidebar.slider(
     "Edad:",
     min_value=int(df['Age'].min()),
     max_value=int(df['Age'].max()),
-    value=(int(df['Age'].min()), int(df['Age'].max()))
+    value=(int(df['Age'].min()), int(df['Age'].max())),
+    help="Rango de edad"
 )
 
 job_levels = st.sidebar.multiselect(
     "Niveles de Trabajo:",
     options=sorted(df['JobLevel'].unique()),
-    default=sorted(df['JobLevel'].unique())
+    default=sorted(df['JobLevel'].unique()),
+    help="Selecciona niveles de trabajo"
 )
 
-education_range = st.sidebar.slider(
+education_levels = st.sidebar.multiselect(
     "Nivel de Educación:",
-    min_value=int(df['Education'].min()),
-    max_value=int(df['Education'].max()),
-    value=(int(df['Education'].min()), int(df['Education'].max()))
+    options=sorted(df['Education'].unique()),
+    default=sorted(df['Education'].unique()),
+    help="Selecciona niveles de educación (1=Below College, 2=College, 3=Bachelor, 4=Master, 5=Doctor)"
 )
 
 income_range = st.sidebar.slider(
@@ -111,64 +134,72 @@ income_range = st.sidebar.slider(
     min_value=int(df['MonthlyIncome'].min()),
     max_value=int(df['MonthlyIncome'].max()),
     value=(int(df['MonthlyIncome'].min()), int(df['MonthlyIncome'].max())),
-    step=1000
+    step=1000,
+    help="Rango de ingreso mensual"
 )
 
 distance_range = st.sidebar.slider(
     "Distancia desde Casa (km):",
     min_value=int(df['DistanceFromHome'].min()),
     max_value=int(df['DistanceFromHome'].max()),
-    value=(int(df['DistanceFromHome'].min()), int(df['DistanceFromHome'].max()))
+    value=(int(df['DistanceFromHome'].min()), int(df['DistanceFromHome'].max())),
+    help="Distancia desde casa al trabajo"
 )
 
 years_company_range = st.sidebar.slider(
     "Años en la Empresa:",
     min_value=int(df['YearsAtCompany'].min()),
     max_value=int(df['YearsAtCompany'].max()),
-    value=(int(df['YearsAtCompany'].min()), int(df['YearsAtCompany'].max()))
+    value=(int(df['YearsAtCompany'].min()), int(df['YearsAtCompany'].max())),
+    help="Años trabajando en la empresa"
 )
 
 total_working_years_range = st.sidebar.slider(
     "Años de Experiencia Total:",
     min_value=int(df['TotalWorkingYears'].min()),
     max_value=int(df['TotalWorkingYears'].max()),
-    value=(int(df['TotalWorkingYears'].min()), int(df['TotalWorkingYears'].max()))
+    value=(int(df['TotalWorkingYears'].min()), int(df['TotalWorkingYears'].max())),
+    help="Total de años de experiencia laboral"
 )
 
-job_satisfaction_range = st.sidebar.slider(
+job_satisfaction_selected = st.sidebar.multiselect(
     "Job Satisfaction:",
-    min_value=int(df['JobSatisfaction'].min()),
-    max_value=int(df['JobSatisfaction'].max()),
-    value=(int(df['JobSatisfaction'].min()), int(df['JobSatisfaction'].max()))
+    options=sorted(df['JobSatisfaction'].unique()),
+    default=sorted(df['JobSatisfaction'].unique()),
+    help="Nivel de satisfacción laboral (1=Low, 2=Medium, 3=High, 4=Very High)"
 )
 
-environment_satisfaction_range = st.sidebar.slider(
+environment_satisfaction_selected = st.sidebar.multiselect(
     "Environment Satisfaction:",
-    min_value=int(df['EnvironmentSatisfaction'].min()),
-    max_value=int(df['EnvironmentSatisfaction'].max()),
-    value=(int(df['EnvironmentSatisfaction'].min()), int(df['EnvironmentSatisfaction'].max()))
+    options=sorted(df['EnvironmentSatisfaction'].unique()),
+    default=sorted(df['EnvironmentSatisfaction'].unique()),
+    help="Satisfacción con el ambiente de trabajo"
 )
 
-relationship_satisfaction_range = st.sidebar.slider(
+relationship_satisfaction_selected = st.sidebar.multiselect(
     "Relationship Satisfaction:",
-    min_value=int(df['RelationshipSatisfaction'].min()),
-    max_value=int(df['RelationshipSatisfaction'].max()),
-    value=(int(df['RelationshipSatisfaction'].min()), int(df['RelationshipSatisfaction'].max()))
+    options=sorted(df['RelationshipSatisfaction'].unique()),
+    default=sorted(df['RelationshipSatisfaction'].unique()),
+    help="Satisfacción con las relaciones en el trabajo"
 )
 
-work_life_balance_range = st.sidebar.slider(
+work_life_balance_selected = st.sidebar.multiselect(
     "Work Life Balance:",
-    min_value=int(df['WorkLifeBalance'].min()),
-    max_value=int(df['WorkLifeBalance'].max()),
-    value=(int(df['WorkLifeBalance'].min()), int(df['WorkLifeBalance'].max()))
+    options=sorted(df['WorkLifeBalance'].unique()),
+    default=sorted(df['WorkLifeBalance'].unique()),
+    help="Nivel de balance vida-trabajo"
 )
 
-performance_rating_range = st.sidebar.slider(
+performance_rating_selected = st.sidebar.multiselect(
     "Rating de Performance:",
-    min_value=int(df['PerformanceRating'].min()),
-    max_value=int(df['PerformanceRating'].max()),
-    value=(int(df['PerformanceRating'].min()), int(df['PerformanceRating'].max()))
+    options=sorted(df['PerformanceRating'].unique()),
+    default=sorted(df['PerformanceRating'].unique()),
+    help="Rating de performance del empleado"
 )
+
+# Botón para limpiar filtros
+if st.sidebar.button("Limpiar Todos los Filtros"):
+    st.experimental_rerun()
 
 # Aplicar todos los filtros
 filtered_df = df[
@@ -182,47 +213,70 @@ filtered_df = df[
     (df['Attrition'].isin(attrition)) &
     (df['Age'].between(age_range[0], age_range[1])) &
     (df['JobLevel'].isin(job_levels)) &
-    (df['Education'].between(education_range[0], education_range[1])) &
+    (df['Education'].isin(education_levels)) &
     (df['MonthlyIncome'].between(income_range[0], income_range[1])) &
     (df['DistanceFromHome'].between(distance_range[0], distance_range[1])) &
     (df['YearsAtCompany'].between(years_company_range[0], years_company_range[1])) &
     (df['TotalWorkingYears'].between(total_working_years_range[0], total_working_years_range[1])) &
-    (df['JobSatisfaction'].between(job_satisfaction_range[0], job_satisfaction_range[1])) &
-    (df['EnvironmentSatisfaction'].between(environment_satisfaction_range[0], environment_satisfaction_range[1])) &
-    (df['RelationshipSatisfaction'].between(relationship_satisfaction_range[0], relationship_satisfaction_range[1])) &
-    (df['WorkLifeBalance'].between(work_life_balance_range[0], work_life_balance_range[1])) &
-    (df['PerformanceRating'].between(performance_rating_range[0], performance_rating_range[1]))
+    (df['JobSatisfaction'].isin(job_satisfaction_selected)) &
+    (df['EnvironmentSatisfaction'].isin(environment_satisfaction_selected)) &
+    (df['RelationshipSatisfaction'].isin(relationship_satisfaction_selected)) &
+    (df['WorkLifeBalance'].isin(work_life_balance_selected)) &
+    (df['PerformanceRating'].isin(performance_rating_selected))
 ]
 
+# Mostrar información sobre filtros aplicados
+if len(filtered_df) < len(df):
+    st.sidebar.info(f"Mostrando {len(filtered_df):,} de {len(df):,} empleados ({len(filtered_df)/len(df)*100:.1f}%)")
+else:
+    st.sidebar.success(f"Mostrando todos los {len(df):,} empleados")
+
 # Métricas principales
-st.header("📈 Métricas Principales")
+st.header("Métricas Principales")
 
 col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     total_employees = len(filtered_df)
-    st.metric("Total Empleados", total_employees)
+    st.metric("Total Empleados", f"{total_employees:,}")
 
 with col2:
-    attrition_rate = (filtered_df['Attrition'] == 'Yes').mean() * 100
-    st.metric("Tasa de Rotación", f"{attrition_rate:.1f}%")
+    if len(filtered_df) > 0:
+        attrition_rate = (filtered_df['Attrition'] == 'Yes').mean() * 100
+        st.metric("Tasa de Rotación", f"{attrition_rate:.1f}%")
+    else:
+        st.metric("Tasa de Rotación", "N/A")
 
 with col3:
-    avg_satisfaction = filtered_df['JobSatisfaction'].mean()
-    st.metric("Satisfacción Promedio", f"{avg_satisfaction:.1f}/5")
+    if len(filtered_df) > 0:
+        avg_satisfaction = filtered_df['JobSatisfaction'].mean()
+        st.metric("Satisfacción Promedio", f"{avg_satisfaction:.1f}/4")
+    else:
+        st.metric("Satisfacción Promedio", "N/A")
 
 with col4:
-    avg_income = filtered_df['MonthlyIncome'].mean()
-    st.metric("Ingreso Promedio", f"${avg_income:,.0f}")
+    if len(filtered_df) > 0:
+        avg_income = filtered_df['MonthlyIncome'].mean()
+        st.metric("Ingreso Promedio", f"${avg_income:,.0f}")
+    else:
+        st.metric("Ingreso Promedio", "N/A")
 
 with col5:
-    avg_years = filtered_df['YearsAtCompany'].mean()
-    st.metric("Años Promedio", f"{avg_years:.1f}")
+    if len(filtered_df) > 0:
+        avg_years = filtered_df['YearsAtCompany'].mean()
+        st.metric("Años Promedio", f"{avg_years:.1f}")
+    else:
+        st.metric("Años Promedio", "N/A")
 
 st.markdown("---")
 
+# Verificar si hay datos para mostrar
+if len(filtered_df) == 0:
+    st.warning("No hay datos que coincidan con los filtros seleccionados. Por favor, ajusta los filtros.")
+    st.stop()
+
 # Gráficos principales
-st.header("📊 Análisis Visual")
+st.header("Análisis Visual")
 
 # Fila 1: Attrition y Demographics
 col1, col2 = st.columns(2)
@@ -237,8 +291,7 @@ with col1:
         y=attrition_pct['Yes'],
         title="Tasa de Rotación por Departamento",
         labels={'x': 'Departamento', 'y': 'Tasa de Rotación (%)'},
-        color=attrition_pct['Yes'],
-        color_continuous_scale='Reds'
+        color_discrete_sequence=['#D4A574']
     )
     fig_attrition.update_layout(showlegend=False)
     st.plotly_chart(fig_attrition, use_container_width=True)
@@ -266,8 +319,7 @@ with col1:
         y=satisfaction_counts.values,
         title="Distribución de Satisfacción Laboral",
         labels={'x': 'Nivel de Satisfacción', 'y': 'Número de Empleados'},
-        color=satisfaction_counts.values,
-        color_continuous_scale='Blues'
+        color_discrete_sequence=['#5A8FC8']
     )
     st.plotly_chart(fig_satisfaction, use_container_width=True)
 
@@ -281,8 +333,7 @@ with col2:
         y='MonthlyIncome',
         title="Ingreso Promedio por Nivel de Trabajo",
         text='MonthlyIncome',
-        color='MonthlyIncome',
-        color_continuous_scale='Blues'
+        color_discrete_sequence=['#5AC86F']
     )
     fig_income.update_traces(texttemplate='$%{text:,.0f}', textposition='outside')
     fig_income.update_layout(
@@ -302,7 +353,7 @@ with col1:
         x='Age',
         nbins=20,
         title="Distribución de Edad de los Empleados",
-        color_discrete_sequence=['lightblue']
+        color_discrete_sequence=['#C85A5A']
     )
     fig_age.update_layout(
         xaxis_title="Edad",
@@ -327,7 +378,7 @@ with col2:
     st.plotly_chart(fig_scatter, use_container_width=True)
 
 # Análisis de Horas Extra y Work-Life Balance
-st.header("⚖️ Análisis de Work-Life Balance")
+st.header("Análisis de Work-Life Balance")
 
 col1, col2 = st.columns(2)
 
@@ -340,8 +391,7 @@ with col1:
         y=overtime_dept['Yes'],
         title="Porcentaje de Empleados con Horas Extra",
         labels={'x': 'Departamento', 'y': 'Porcentaje con Horas Extra (%)'},
-        color=overtime_dept['Yes'],
-        color_continuous_scale='Oranges'
+        color_discrete_sequence=['#C8905A']
     )
     st.plotly_chart(fig_overtime, use_container_width=True)
 
@@ -354,13 +404,12 @@ with col2:
         y=wlb_counts.values,
         title="Distribución de Work-Life Balance",
         labels={'x': 'Nivel de Work-Life Balance', 'y': 'Número de Empleados'},
-        color=wlb_counts.values,
-        color_continuous_scale='Greens'
+        color_discrete_sequence=['#8F5AC8']
     )
     st.plotly_chart(fig_wlb, use_container_width=True)
 
 # Heatmap de Correlaciones
-st.header("🔥 Mapa de Correlaciones")
+st.header("Mapa de Correlaciones")
 
 # Seleccionar solo columnas numéricas
 numeric_cols = filtered_df.select_dtypes(include=[np.number]).columns
@@ -369,20 +418,20 @@ correlation_matrix = filtered_df[numeric_cols].corr()
 fig_heatmap = px.imshow(
     correlation_matrix,
     title="Matriz de Correlación de Variables Numéricas",
-    color_continuous_scale='RdBu',
+    color_continuous_scale=['#F5F2E8', '#E8DCC6', '#D4A574', '#A67C52', '#4A453E'],
     aspect='auto'
 )
 fig_heatmap.update_layout(height=600)
 st.plotly_chart(fig_heatmap, use_container_width=True)
 
 # Análisis de Rotación Detallado
-st.header("🔄 Análisis Detallado de Rotación - Insights Clave")
+st.header("Análisis Detallado de Rotación - Insights Clave")
 
 # Crear pestañas para diferentes análisis
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["Fatiga Operativa", "Early-Career & Underpaid", "Pared de los 3 Años", "Equidad Interna", "Clima como Amplificador"])
 
 with tab1:
-    st.subheader("🔥 Fatiga Operativa - Eje Gravitacional")
+    st.subheader("Fatiga Operativa - Eje Gravitacional")
     st.markdown("**Casi dos de cada tres renuncias pertenecen a personas que trabajan horas extra o viajan seguido**")
     
     col1, col2 = st.columns(2)
@@ -403,8 +452,7 @@ with tab1:
             y='Attrition_Rate',
             title="Tasa de Attrition: Normal vs Alta Fatiga",
             text='Attrition_Rate',
-            color='Attrition_Rate',
-            color_continuous_scale='Reds'
+            color_discrete_sequence=['#C85A5A']
         )
         fig_fatigue.update_traces(texttemplate='%{text:.1%}', textposition='outside')
         fig_fatigue.update_layout(showlegend=False)
@@ -434,8 +482,7 @@ with tab1:
                 orientation='h',
                 title="Roles con Mayor Riesgo (OT + Travel)",
                 text='Attrition_Rate',
-                color='Attrition_Rate',
-                color_continuous_scale='Reds'
+                color_discrete_sequence=['#C85A5A']
             )
             fig_high_risk.update_traces(texttemplate='%{text:.1%}', textposition='outside')
             fig_high_risk.update_layout(showlegend=False)
@@ -473,8 +520,7 @@ with tab2:
             y='Attrition_Rate',
             title="Perfil de Riesgo: Early-Career & Underpaid",
             text='Attrition_Rate',
-            color='Attrition_Rate',
-            color_continuous_scale='Oranges'
+            color_discrete_sequence=['#C8905A']
         )
         fig_risk.update_traces(texttemplate='%{text:.1%}', textposition='outside')
         fig_risk.update_layout(showlegend=False, xaxis_tickangle=45)
@@ -499,13 +545,13 @@ with tab2:
         fig_heatmap_age_income = px.imshow(
             heatmap_data,
             title="Heatmap: Attrition por Edad vs Ingreso",
-            color_continuous_scale='Reds',
+            color_continuous_scale=['#F5F2E8', '#E8DCC6', '#D4A574', '#C85A5A', '#4A453E'],
             text_auto='.2f'
         )
         st.plotly_chart(fig_heatmap_age_income, use_container_width=True)
 
 with tab3:
-    st.subheader("📊 Pared de los 3 Años")
+    st.subheader("Pared de los 3 Años")
     st.markdown("**La mediana YearsAtCompany para desertores es 3; quienes superan esa barrera estabilizan su riesgo**")
     
     col1, col2 = st.columns(2)
@@ -528,8 +574,7 @@ with tab3:
             y='Attrition_Rate',
             title="Tasa de Attrition por Años en la Empresa",
             text='Attrition_Rate',
-            color='Attrition_Rate',
-            color_continuous_scale='Blues'
+            color_discrete_sequence=['#5A8FC8']
         )
         fig_years.update_traces(texttemplate='%{text:.1%}', textposition='outside')
         fig_years.update_layout(showlegend=False)
@@ -557,8 +602,7 @@ with tab3:
             y='Attrition_Rate',
             title="Stagnation Index vs Attrition",
             text='Attrition_Rate',
-            color='Attrition_Rate',
-            color_continuous_scale='Purples'
+            color_discrete_sequence=['#8F5AC8']
         )
         fig_stagnation.update_traces(texttemplate='%{text:.1%}', textposition='outside')
         fig_stagnation.update_layout(showlegend=False)
@@ -568,7 +612,7 @@ with tab3:
         st.dataframe(stagnation_attrition)
 
 with tab4:
-    st.subheader("⚖️ Equidad Interna > Dinero Absoluto")
+    st.subheader("Equidad Interna > Dinero Absoluto")
     st.markdown("**Estar en el cuartil inferior de tu banda eleva el riesgo casi 3×**")
     
     col1, col2 = st.columns(2)
@@ -625,15 +669,14 @@ with tab4:
             y='Attrition_Rate',
             title="Attrition por Percentil Salarial Global",
             text='Attrition_Rate',
-            color='Attrition_Rate',
-            color_continuous_scale='Greens'
+            color_discrete_sequence=['#5AC86F']
         )
         fig_percentile.update_traces(texttemplate='%{text:.1%}', textposition='outside')
         fig_percentile.update_layout(showlegend=False)
         st.plotly_chart(fig_percentile, use_container_width=True)
 
 with tab5:
-    st.subheader("🌡️ Clima como Amplificador")
+    st.subheader("Clima como Amplificador")
     st.markdown("**Job/Environment Satisfaction niveles 1-2 añaden +8 p.p. de riesgo a cualquier otro driver**")
     
     col1, col2 = st.columns(2)
@@ -675,8 +718,7 @@ with tab5:
             y='Attrition_Rate',
             title="Efecto Amplificador del Clima Laboral",
             text='Attrition_Rate',
-            color='Attrition_Rate',
-            color_continuous_scale='Reds'
+            color_discrete_sequence=['#C85A5A']
         )
         fig_climate.update_traces(texttemplate='%{text:.1%}', textposition='outside')
         fig_climate.update_layout(showlegend=False, xaxis_tickangle=45)
@@ -697,7 +739,7 @@ with tab5:
         fig_satisfaction_heatmap = px.imshow(
             satisfaction_heatmap,
             title="Heatmap: Job vs Environment Satisfaction",
-            color_continuous_scale='Reds',
+            color_continuous_scale=['#F5F2E8', '#E8DCC6', '#D4A574', '#C85A5A', '#4A453E'],
             text_auto='.2f'
         )
         fig_satisfaction_heatmap.update_layout(
@@ -721,12 +763,8 @@ with tab5:
         st.write("**Impacto de Baja Satisfacción:**")
         st.dataframe(sat_summary)
 
-# ===================
-# GRÁFICOS ADICIONALES
-# ====================
-
 # Análisis por Grupos de Edad e Ingresos
-st.header("📊 Análisis por Grupos Demográficos")
+st.header("Análisis por Grupos Demográficos")
 
 col1, col2 = st.columns(2)
 
@@ -742,8 +780,7 @@ with col1:
         title="Tasa de Attrition por Grupo de Edad",
         labels={'Age_Group': 'Grupo de Edad', 'Attrition_Rate': 'Tasa de Attrition'},
         text='Attrition_Rate',
-        color='Attrition_Rate',
-        color_continuous_scale='Blues'
+        color_discrete_sequence=['#5A8FC8']
     )
     fig_age_groups.update_traces(texttemplate='%{text:.1%}', textposition='outside')
     fig_age_groups.update_layout(showlegend=False)
@@ -770,8 +807,7 @@ with col2:
         title="Tasa de Attrition por Grupo de Ingresos",
         labels={'Income_Label': 'Grupo de Ingresos', 'Attrition_Rate': 'Tasa de Attrition'},
         text='Attrition_Rate',
-        color='Attrition_Rate',
-        color_continuous_scale='Reds'
+        color_discrete_sequence=['#C85A5A']
     )
     fig_income_groups.update_traces(texttemplate='%{text:.1%}', textposition='outside')
     fig_income_groups.update_layout(showlegend=False, xaxis_tickangle=45)
@@ -783,7 +819,7 @@ with col2:
     st.dataframe(display_income)
 
 # Análisis Multivariado
-st.header("🔄 Análisis Multivariado de Attrition")
+st.header("Análisis Multivariado de Attrition")
 
 col1, col2 = st.columns(2)
 
@@ -797,7 +833,7 @@ with col1:
     fig_heatmap_multi = px.imshow(
         pivot_data,
         title="Tasa de Attrition: Departamento vs OverTime",
-        color_continuous_scale='Reds',
+        color_continuous_scale=['#F5F2E8', '#E8DCC6', '#D4A574', '#C85A5A', '#4A453E'],
         aspect='auto',
         text_auto='.3f'
     )
@@ -820,8 +856,7 @@ with col2:
         orientation='h',
         title="Top 8 Combinaciones con Mayor Attrition",
         text='Attrition_Rate',
-        color='Attrition_Rate',
-        color_continuous_scale='Reds'
+        color_discrete_sequence=['#C85A5A']
     )
     fig_multi.update_traces(texttemplate='%{text:.1%}', textposition='outside')
     fig_multi.update_layout(showlegend=False, height=400)
@@ -831,7 +866,7 @@ with col2:
     st.dataframe(multi_analysis[['Department', 'Gender', 'OverTime', 'Count', 'Attrition_Rate']].round(3))
 
 # Análisis por Variables Categóricas
-st.header("📈 Análisis por Variables Categóricas")
+st.header("Análisis por Variables Categóricas")
 
 categorical_cols = ['Department', 'JobRole', 'Gender', 'MaritalStatus', 'EducationField', 'BusinessTravel', 'OverTime']
 available_categorical = [col for col in categorical_cols if col in filtered_df.columns]
@@ -852,8 +887,7 @@ if available_categorical:
             title=f"Distribución de {selected_var}",
             labels={'x': selected_var, 'y': 'Número de Empleados'},
             text=value_counts.values,
-            color=value_counts.values,
-            color_continuous_scale='Viridis'
+            color_discrete_sequence=['#D4A574']
         )
         fig_dist.update_traces(textposition='outside')
         fig_dist.update_layout(showlegend=False, xaxis_tickangle=45)
@@ -869,8 +903,7 @@ if available_categorical:
             title=f"Tasa de Attrition por {selected_var}",
             labels={'x': selected_var, 'y': 'Tasa de Attrition (%)'},
             text=ct['Yes'],
-            color=ct['Yes'],
-            color_continuous_scale='Reds'
+            color_discrete_sequence=['#C85A5A']
         )
         fig_attrition_cat.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
         fig_attrition_cat.update_layout(showlegend=False, xaxis_tickangle=45)
@@ -882,7 +915,7 @@ if available_categorical:
         st.dataframe(ct_abs)
 
 # Vista Comparativa - Todas las Variables
-st.header("📊 Vista Comparativa - Todas las Variables")
+st.header("Vista Comparativa - Todas las Variables")
 
 st.subheader("Resumen de Attrition por Todas las Variables")
 
@@ -940,13 +973,13 @@ display_summary = summary_df[['Variable', 'Categoria', 'Tasa_Attrition', 'Count'
 st.dataframe(display_summary, height=300)
 
 # Tabla de datos resumida
-st.header("📋 Resumen de Datos")
+st.header("Resumen de Datos")
 
 summary_stats = filtered_df.describe()
 st.dataframe(summary_stats, use_container_width=True)
 
 # Sección de exportación
-st.header("💾 Exportar Datos")
+st.header("Exportar Datos")
 
 col1, col2 = st.columns(2)
 
@@ -972,4 +1005,4 @@ with col2:
 
 # Footer
 st.markdown("---")
-st.markdown("Dashboard creado con Streamlit 🚀 | Datos de HR Analytics")
+st.markdown("Dashboard creado con Streamlit | Datos de HR Analytics")
