@@ -1,0 +1,15 @@
+[theme]
+# Color principal - Un beige/marrón cálido como los botones
+primaryColor = "#D4A574"
+
+# Fondo principal - Crema/beige muy claro
+backgroundColor = "#F5F2E8"
+
+# Fondo secundario (sidebar y elementos) - Un beige más cálido
+secondaryBackgroundColor = "#E8E2D5"
+
+# Color del texto - Marrón oscuro/carbón
+textColor = "#4A453E"
+
+# Fuente - Sans serif limpia
+font = "sans serif"
