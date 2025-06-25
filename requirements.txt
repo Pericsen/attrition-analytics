@@ -4,5 +4,4 @@ plotly
 numpy
 seaborn
 matplotlib
-pickle
 joblib
