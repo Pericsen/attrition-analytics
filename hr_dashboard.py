@@ -291,8 +291,10 @@ with col1:
         y=attrition_pct['Yes'],
         title="Tasa de Rotación por Departamento",
         labels={'x': 'Departamento', 'y': 'Tasa de Rotación (%)'},
+        text=attrition_pct['Yes'],
         color_discrete_sequence=['#D4A574']
     )
+    fig_attrition.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
     fig_attrition.update_layout(showlegend=False)
     st.plotly_chart(fig_attrition, use_container_width=True)
 
@@ -319,8 +321,10 @@ with col1:
         y=satisfaction_counts.values,
         title="Distribución de Satisfacción Laboral",
         labels={'x': 'Nivel de Satisfacción', 'y': 'Número de Empleados'},
+        text = satisfaction_counts.values,
         color_discrete_sequence=['#5A8FC8']
     )
+    fig_satisfaction.update_traces(textposition='outside')
     st.plotly_chart(fig_satisfaction, use_container_width=True)
 
 with col2:
@@ -391,8 +395,10 @@ with col1:
         y=overtime_dept['Yes'],
         title="Porcentaje de Empleados con Horas Extra",
         labels={'x': 'Departamento', 'y': 'Porcentaje con Horas Extra (%)'},
+        text = overtime_dept['Yes'],
         color_discrete_sequence=['#C8905A']
     )
+    fig_overtime.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
     st.plotly_chart(fig_overtime, use_container_width=True)
 
 with col2:
@@ -404,9 +410,40 @@ with col2:
         y=wlb_counts.values,
         title="Distribución de Work-Life Balance",
         labels={'x': 'Nivel de Work-Life Balance', 'y': 'Número de Empleados'},
+        text=wlb_counts.values,
         color_discrete_sequence=['#8F5AC8']
     )
+    fig_wlb.update_traces(textposition='outside')
     st.plotly_chart(fig_wlb, use_container_width=True)
+
+# Análisis de attrition por monthly rate
+st.header("Análisis de Attrition por Monthly Rate")
+
+st.subheader("Rotación por Monthly Rate")
+
+# Crear el gráfico base
+fig_rate = px.scatter(
+    filtered_df,
+    x='TotalWorkingYears',
+    y='MonthlyIncome',
+    color='Attrition',
+    labels={'x': 'Total Working Years', 'y': 'Monthly Income'},
+    color_discrete_map={'No': "#78B3F1", 'Yes': "#BD4242"},
+)
+
+# Actualizar las trazas para diferentes opacidades
+for trace in fig_rate.data:
+    if trace.name == 'No':
+        trace.marker.opacity = 0.2  # Opacidad completa para No
+    else:  # Yes
+        trace.marker.opacity = 0.8  # Opacidad reducida para Yes
+
+fig_rate.update_layout(
+    xaxis_title="Total Working Years",
+    yaxis_title="Monthly Income"
+)
+st.plotly_chart(fig_rate, use_container_width=True)
+
 
 # Heatmap de Correlaciones
 st.header("Mapa de Correlaciones")
@@ -455,7 +492,9 @@ with tab1:
             color_discrete_sequence=['#C85A5A']
         )
         fig_fatigue.update_traces(texttemplate='%{text:.1%}', textposition='outside')
-        fig_fatigue.update_layout(showlegend=False)
+        fig_fatigue.update_layout(
+            showlegend=False, 
+            yaxis = dict(range=[0, (fatigue_attrition['Attrition_Rate'] if 'Attrition_Rate' in fatigue_attrition.columns else pd.Series([0])).max() * 1.1]))
         st.plotly_chart(fig_fatigue, use_container_width=True)
         
         # Estadísticas
@@ -463,22 +502,25 @@ with tab1:
         st.dataframe(fatigue_attrition)
     
     with col2:
-        # Análisis de combinación OT + Travel por JobRole
+    # Análisis de combinación OT + Travel por JobRole
         ot_travel_analysis = filtered_df.groupby(['JobRole', 'OverTime', 'BusinessTravel'])['Attrition_Numeric'].agg(['count', 'mean']).reset_index()
         ot_travel_analysis.columns = ['JobRole', 'OverTime', 'BusinessTravel', 'Count', 'Attrition_Rate']
         ot_travel_analysis = ot_travel_analysis[ot_travel_analysis['Count'] >= 3]
-        
+
         # Filtrar casos de alto riesgo (OT + Travel)
         high_risk = ot_travel_analysis[
             (ot_travel_analysis['OverTime'] == 'Yes') & 
             (ot_travel_analysis['BusinessTravel'].isin(['Travel_Frequently', 'Travel_Rarely']))
         ].sort_values('Attrition_Rate', ascending=False)
-        
+
+        # Crear campo combinado para evitar apilamiento
+        high_risk['JobRole_Detail'] = high_risk['JobRole'] + ' (' + high_risk['BusinessTravel'] + ')'
+
         if not high_risk.empty:
             fig_high_risk = px.bar(
                 high_risk.head(8),
                 x='Attrition_Rate',
-                y='JobRole',
+                y='JobRole_Detail',  # Usar el campo combinado
                 orientation='h',
                 title="Roles con Mayor Riesgo (OT + Travel)",
                 text='Attrition_Rate',
@@ -487,10 +529,10 @@ with tab1:
             fig_high_risk.update_traces(texttemplate='%{text:.1%}', textposition='outside')
             fig_high_risk.update_layout(showlegend=False)
             st.plotly_chart(fig_high_risk, use_container_width=True)
-        
+
         st.write("**Top Combinaciones de Riesgo:**")
         if not high_risk.empty:
-            st.dataframe(high_risk[['JobRole', 'Count', 'Attrition_Rate']].round(3))
+            st.dataframe(high_risk[['JobRole', 'BusinessTravel', 'Count', 'Attrition_Rate']].round(3))
 
 with tab2:
     st.subheader("Early-Career & Underpaid")
@@ -523,7 +565,10 @@ with tab2:
             color_discrete_sequence=['#C8905A']
         )
         fig_risk.update_traces(texttemplate='%{text:.1%}', textposition='outside')
-        fig_risk.update_layout(showlegend=False, xaxis_tickangle=45)
+        fig_risk.update_layout(
+            showlegend=False, 
+            xaxis_tickangle=45,
+            yaxis = dict(range=[0, (risk_analysis['Attrition_Rate'] if 'Attrition_Rate' in risk_analysis.columns else pd.Series([0])).max() * 1.1]))
         st.plotly_chart(fig_risk, use_container_width=True)
         
         st.write("**Análisis de Perfil de Riesgo:**")
@@ -577,7 +622,9 @@ with tab3:
             color_discrete_sequence=['#5A8FC8']
         )
         fig_years.update_traces(texttemplate='%{text:.1%}', textposition='outside')
-        fig_years.update_layout(showlegend=False)
+        fig_years.update_layout(
+            showlegend=False,
+            yaxis = dict(range=[0, (years_attrition['Attrition_Rate'] if 'Attrition_Rate' in years_attrition.columns else pd.Series([0])).max() * 1.1]))
         st.plotly_chart(fig_years, use_container_width=True)
         
         st.write("**Análisis por Años en la Empresa:**")
@@ -721,7 +768,10 @@ with tab5:
             color_discrete_sequence=['#C85A5A']
         )
         fig_climate.update_traces(texttemplate='%{text:.1%}', textposition='outside')
-        fig_climate.update_layout(showlegend=False, xaxis_tickangle=45)
+        fig_climate.update_layout(
+            showlegend=False, 
+            xaxis_tickangle=45,
+            yaxis=dict(range=[0, (climate_summary['Attrition_Rate'] if 'Attrition_Rate' in climate_summary.columns else pd.Series([0])).max() * 1.1]))
         st.plotly_chart(fig_climate, use_container_width=True)
         
         st.write("**Análisis del Efecto Amplificador:**")
@@ -810,7 +860,9 @@ with col2:
         color_discrete_sequence=['#C85A5A']
     )
     fig_income_groups.update_traces(texttemplate='%{text:.1%}', textposition='outside')
-    fig_income_groups.update_layout(showlegend=False, xaxis_tickangle=45)
+    fig_income_groups.update_layout(
+        showlegend=False,  
+        yaxis = dict(range=[0, (income_analysis['Attrition_Rate'] if 'Attrition_Rate' in income_analysis.columns else pd.Series([0])).max() * 1.1]))
     st.plotly_chart(fig_income_groups, use_container_width=True)
     
     # Mostrar tabla
@@ -877,9 +929,15 @@ if available_categorical:
     
     col1, col2 = st.columns(2)
     
+    # Obtener todas las categorías únicas y ordenarlas
+    all_categories = sorted(filtered_df[selected_var].unique())
+    
     with col1:
         st.subheader(f"Distribución de {selected_var}")
         value_counts = filtered_df[selected_var].value_counts()
+        
+        # Reindexar para incluir todas las categorías (rellenar con 0 si no existen)
+        value_counts = value_counts.reindex(all_categories, fill_value=0)
         
         fig_dist = px.bar(
             x=value_counts.index,
@@ -890,28 +948,43 @@ if available_categorical:
             color_discrete_sequence=['#D4A574']
         )
         fig_dist.update_traces(textposition='outside')
-        fig_dist.update_layout(showlegend=False, xaxis_tickangle=45)
+        fig_dist.update_layout(
+            showlegend=False, 
+            xaxis_tickangle=45,
+            xaxis=dict(categoryorder='array', categoryarray=all_categories),
+            yaxis=dict(range=[0, value_counts.max() * 1.1])  # Rango Y con 10% extra
+        )
         st.plotly_chart(fig_dist, use_container_width=True)
     
     with col2:
         st.subheader(f"Attrition por {selected_var}")
         ct = pd.crosstab(filtered_df[selected_var], filtered_df['Attrition'], normalize='index') * 100
         
+        # Reindexar para incluir todas las categorías
+        ct = ct.reindex(all_categories, fill_value=0)
+        
         fig_attrition_cat = px.bar(
             x=ct.index,
-            y=ct['Yes'],
+            y=ct['Yes'] if 'Yes' in ct.columns else [0] * len(ct.index),
             title=f"Tasa de Attrition por {selected_var}",
             labels={'x': selected_var, 'y': 'Tasa de Attrition (%)'},
-            text=ct['Yes'],
+            text=ct['Yes'] if 'Yes' in ct.columns else [0] * len(ct.index),
             color_discrete_sequence=['#C85A5A']
         )
         fig_attrition_cat.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        fig_attrition_cat.update_layout(showlegend=False, xaxis_tickangle=45)
+        fig_attrition_cat.update_layout(
+            showlegend=False, 
+            xaxis_tickangle=45,
+            xaxis=dict(categoryorder='array', categoryarray=all_categories),
+            yaxis=dict(range=[0, (ct['Yes'] if 'Yes' in ct.columns else pd.Series([0])).max() * 1.1])  # Rango Y con 10% extra
+        )
         st.plotly_chart(fig_attrition_cat, use_container_width=True)
         
         # Mostrar tabla de contingencia
         st.write("**Tabla de Contingencia:**")
         ct_abs = pd.crosstab(filtered_df[selected_var], filtered_df['Attrition'])
+        # Reindexar la tabla absoluta también para consistencia
+        ct_abs = ct_abs.reindex(all_categories, fill_value=0)
         st.dataframe(ct_abs)
 
 # Vista Comparativa - Todas las Variables
@@ -945,7 +1018,8 @@ fig_summary = px.scatter(
     size='Count',
     hover_data=['Categoria'],
     title="Attrition Rate vs Tamaño de Grupo por Variable",
-    labels={'Count': 'Número de Empleados', 'Tasa_Attrition': 'Tasa de Attrition (%)'}
+    labels={'Count': 'Número de Empleados', 'Tasa_Attrition': 'Tasa de Attrition (%)'},
+    opacity=0.8
 )
 fig_summary.update_layout(height=500)
 st.plotly_chart(fig_summary, use_container_width=True)
@@ -961,7 +1035,8 @@ fig_top = px.bar(
     color='Variable',
     orientation='h',
     title="Top 10 Categorías con Mayor Tasa de Attrition",
-    text='Tasa_Attrition'
+    text='Tasa_Attrition',
+    opacity=0.9
 )
 fig_top.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
 fig_top.update_layout(height=500)
