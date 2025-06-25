@@ -8,19 +8,79 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.io as pio
 
+
+class TargetEncoder:
+    """
+    Target Encoder con suavizado para evitar overfitting
+    """
+    def __init__(self, smoothing=1.0, min_samples_leaf=1):
+        self.smoothing = smoothing
+        self.min_samples_leaf = min_samples_leaf
+        self.encodings = {}
+        self.global_mean = None
+        
+    def fit(self, X, y):
+        """
+        Ajusta el encoder con los datos de entrenamiento
+        """
+        self.global_mean = y.mean()
+        
+        # Crear un DataFrame temporal combinando X e y
+        temp_df = X.copy()
+        temp_df['target'] = y.values
+        
+        for column in X.columns:
+            # Calcular estadísticas por categoría
+            stats = temp_df.groupby(column)['target'].agg(['count', 'mean']).reset_index()
+            stats.columns = [column, 'count', 'mean']
+            
+            # Aplicar suavizado
+            # Formula: (count * mean + smoothing * global_mean) / (count + smoothing)
+            stats['smoothed_mean'] = (
+                (stats['count'] * stats['mean'] + self.smoothing * self.global_mean) / 
+                (stats['count'] + self.smoothing)
+            )
+            
+            # Filtrar categorías con pocas muestras
+            stats = stats[stats['count'] >= self.min_samples_leaf]
+            
+            # Guardar encoding
+            encoding_dict = dict(zip(stats[column], stats['smoothed_mean']))
+            self.encodings[column] = encoding_dict
+            
+        return self
+    
+    def transform(self, X):
+        """
+        Transforma las variables categóricas usando el encoding ajustado
+        """
+        X_encoded = X.copy()
+        
+        for column in X.columns:
+            if column in self.encodings:
+                # Mapear valores conocidos, usar global_mean para valores nuevos
+                X_encoded[column] = X[column].map(self.encodings[column]).fillna(self.global_mean)
+            
+        return X_encoded
+    
+    def fit_transform(self, X, y):
+        """
+        Ajusta y transforma en un solo paso
+        """
+        return self.fit(X, y).transform(X)
 # Configurar tema global para todos los plots
-pio.templates["anthropic"] = {
-    'layout': {
-        'colorway': ['#D4A574', '#5A8FC8', '#5AC86F', '#C85A5A', '#C8905A', '#8F5AC8'],
-        'paper_bgcolor': '#F5F2E8',  # Fondo coincide con tu tema
-        'plot_bgcolor': '#FFFCF7',   # Fondo del área de ploteo
-        'font': {'color': '#4A453E'}, # Color del texto
-        'title': {'font': {'color': '#4A453E', 'size': 16}, 'x': 0.5},
-        'xaxis': {'gridcolor': '#E8E2D5', 'linecolor': '#4A453E'},
-        'yaxis': {'gridcolor': '#E8E2D5', 'linecolor': '#4A453E'},
-    }
-}
-pio.templates.default = "anthropic"
+# pio.templates["anthropic"] = {
+#     'layout': {
+#         'colorway': ['#D4A574', '#5A8FC8', '#5AC86F', '#C85A5A', '#C8905A', '#8F5AC8'],
+#         'paper_bgcolor': '#F5F2E8',  # Fondo coincide con tu tema
+#         'plot_bgcolor': '#E8E2D5',   # Fondo del área de ploteo
+#         'font': {'color': '#4A453E'}, # Color del texto
+#         'title': {'font': {'color': '#4A453E', 'size': 16}, 'x': 0.5},
+#         'xaxis': {'gridcolor': '#E8E2D5', 'linecolor': '#4A453E'},
+#         'yaxis': {'gridcolor': '#E8E2D5', 'linecolor': '#4A453E'},
+#     }
+# }
+# pio.templates.default = "anthropic"
 
 # Configuración de la página
 st.set_page_config(
@@ -1077,6 +1137,326 @@ with col2:
             file_name="hr_analytics_summary.csv",
             mime="text/csv"
         )
+
+# ====== SECCIÓN DE PREDICCIÓN DE ATTRITION ======
+import joblib 
+import pickle
+
+st.header("Predicción de Attrition")
+st.write("Utiliza nuestro modelo de machine learning para predecir la probabilidad de que un empleado deje la empresa.")
+
+# Cargar el modelo
+@st.cache_resource
+def load_model():
+    try:
+        # Intentar cargar el modelo XGBoost optimizado primero
+        model_components = joblib.load('attrition_model_xgboost_optimized_f1.pkl')
+        return model_components
+    except FileNotFoundError:
+        try:
+            # Intentar cargar modelo XGBoost básico
+            model_components = joblib.load('attrition_model_xgboost_optimized.pkl')
+            return model_components
+        except FileNotFoundError:
+            try:
+                # Intentar cargar modelo LightGBM
+                model_components = joblib.load('attrition_model_lightgbm_target_encoded.pkl')
+                return model_components
+            except FileNotFoundError:
+                st.error("❌ Modelo no encontrado. Asegúrate de haber entrenado y guardado el modelo.")
+                return None
+
+model_components = load_model()
+
+if model_components is not None:
+    # Función de predicción universal
+    def predict_attrition_streamlit(employee_data):
+        try:
+            model = model_components['model']
+            scaler = model_components['scaler']
+            feature_names = model_components['feature_names']
+            categorical_features = model_components['categorical_features']
+            numerical_features = model_components['numerical_features']
+            model_type = model_components.get('model_type', 'Unknown')
+            
+            # Crear dataframe
+            emp_df = pd.DataFrame([employee_data])
+            
+            # Manejar encoding según el tipo de modelo
+            if 'TargetEncoded' in model_type:
+                # Modelo con Target Encoding
+                target_encoder = model_components['target_encoder']
+                
+                # Separar features categóricas y numéricas
+                if categorical_features:
+                    emp_categorical = emp_df[categorical_features]
+                    emp_categorical_encoded = target_encoder.transform(emp_categorical)
+                else:
+                    emp_categorical_encoded = pd.DataFrame()
+                
+                if numerical_features:
+                    emp_numerical = emp_df[numerical_features]
+                    emp_numerical_scaled = pd.DataFrame(
+                        scaler.transform(emp_numerical),
+                        columns=numerical_features
+                    )
+                else:
+                    emp_numerical_scaled = pd.DataFrame()
+                
+                # Combinar features
+                emp_features = pd.concat([emp_categorical_encoded, emp_numerical_scaled], axis=1)
+                
+                # Asegurar orden correcto
+                emp_features = emp_features[feature_names]
+                
+            else:
+                # Modelo con Label Encoding
+                label_encoders = model_components['label_encoders']
+                
+                # Label encoding para categóricas
+                for feature in categorical_features:
+                    if feature in emp_df.columns and feature in label_encoders:
+                        le = label_encoders[feature]
+                        try:
+                            emp_df[f'{feature}_encoded'] = le.transform(emp_df[feature])
+                        except ValueError:
+                            # Valor no visto, usar 0
+                            emp_df[f'{feature}_encoded'] = 0
+                
+                # Preparar features
+                emp_features = emp_df[feature_names].fillna(0)
+                
+                # Escalar numéricas
+                emp_features[numerical_features] = scaler.transform(emp_features[numerical_features])
+            
+            # Predecir
+            probability = model.predict_proba(emp_features)[0]
+            prediction = model.predict(emp_features)[0]
+            
+            # Usar threshold optimizado si está disponible
+            threshold = model_components.get('best_threshold', 0.5)
+            prediction_optimized = 1 if probability[1] >= threshold else 0
+            
+            return {
+                'prediction': 'Sí' if prediction_optimized == 1 else 'No',
+                'probability_no': probability[0],
+                'probability_yes': probability[1],
+                'threshold_used': threshold,
+                'model_type': model_type
+            }
+        except Exception as e:
+            st.error(f"Error en predicción: {str(e)}")
+            return None
+    
+    # Crear formulario de entrada
+    st.subheader("Ingresa los datos del empleado:")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write("**Información Laboral**")
+        years_at_company = st.number_input(
+            "Años en la Empresa", 
+            min_value=0, 
+            max_value=40, 
+            value=3,
+            help="Número de años que el empleado ha trabajado en la empresa"
+        )
+        
+        monthly_income = st.number_input(
+            "Ingreso Mensual ($)", 
+            min_value=1000, 
+            max_value=25000, 
+            value=5000, 
+            step=100,
+            help="Salario mensual del empleado en dólares"
+        )
+    
+    with col2:
+        st.write("**Información Personal**")
+        age = st.number_input(
+            "Edad", 
+            min_value=18, 
+            max_value=70, 
+            value=30,
+            help="Edad del empleado"
+        )
+        
+        overtime = st.selectbox(
+            "Horas Extra",
+            options=["No", "Yes"],
+            index=0,
+            help="¿El empleado trabaja horas extra regularmente?"
+        )
+    
+    with col3:
+        st.write("**Viajes de Trabajo**")
+        business_travel = st.selectbox(
+            "Viajes de Negocio",
+            options=["Non-Travel", "Travel_Rarely", "Travel_Frequently"],
+            index=0,
+            help="Frecuencia de viajes de trabajo del empleado"
+        )
+        
+        # Campo adicional opcional para completar el modelo
+        job_level = st.selectbox(
+            "Nivel de Trabajo",
+            options=[1, 2, 3, 4, 5],
+            index=1,
+            help="Nivel jerárquico del empleado (1=Junior, 5=Senior)"
+        )
+    
+    # Botón de predicción
+    if st.button("Predecir Riesgo de Attrition", type="primary"):
+        # Recopilar datos básicos
+        employee_data = {
+            'YearsAtCompany': years_at_company,
+            'MonthlyIncome': monthly_income,
+            'Age': age,
+            'OverTime': overtime,
+            'BusinessTravel': business_travel,
+            'JobLevel': job_level,
+            # Valores por defecto para otros campos requeridos
+            'TotalWorkingYears': max(age - 18, years_at_company),
+            'YearsInCurrentRole': min(years_at_company, 2),
+            'YearsSinceLastPromotion': min(years_at_company, 1),
+            'Education': 3,
+            'DistanceFromHome': 10,
+            'WorkLifeBalance': 3,
+            'JobSatisfaction': 3,
+            'EnvironmentSatisfaction': 3,
+            'JobInvolvement': 3,
+            'Department': 'Sales',  # Valor por defecto
+            'JobRole': 'Sales Executive',  # Valor por defecto
+            'Gender': 'Male',  # Valor por defecto
+            'MaritalStatus': 'Married',  # Valor por defecto
+            'EducationField': 'Technical Degree',  # Valor por defecto
+            'DailyRate': 800,
+            'HourlyRate': 50,
+            'MonthlyRate': 15000,
+            'NumCompaniesWorked': 2,
+            'PercentSalaryHike': 15,
+            'PerformanceRating': 3,
+            'RelationshipSatisfaction': 3,
+            'StockOptionLevel': 1,
+            'TrainingTimesLastYear': 3,
+            'YearsWithCurrManager': min(years_at_company, 2)
+        }
+        
+        # Hacer predicción
+        result = predict_attrition_streamlit(employee_data)
+        
+        if result is not None:
+            # Mostrar resultados
+            st.subheader("📊 Resultados de la Predicción")
+            
+            col_result1, col_result2 = st.columns(2)
+            
+            with col_result1:
+                # Predicción principal con colores
+                if result['prediction'] == 'Sí':
+                    st.error(f"⚠️ **Predicción: ALTO RIESGO de Attrition**")
+                    st.error(f"🔴 Probabilidad de Attrition: **{result['probability_yes']:.1%}**")
+                else:
+                    st.success(f"✅ **Predicción: BAJO RIESGO de Attrition**")
+                    st.success(f"🟢 Probabilidad de Retención: **{result['probability_no']:.1%}**")
+                
+                # Información técnica
+                st.info(f"🎯 Threshold usado: {result['threshold_used']:.3f}")
+                st.info(f"🤖 Modelo: {result['model_type']}")
+            
+            with col_result2:
+                # Gráfico de probabilidades
+                prob_data = pd.DataFrame({
+                    'Resultado': ['Se Queda', 'Se Va'],
+                    'Probabilidad': [result['probability_no'], result['probability_yes']],
+                    'Color': ['#5A8FC8', '#C85A5A']
+                })
+                
+                fig_prob = px.bar(
+                    prob_data,
+                    x='Resultado',
+                    y='Probabilidad',
+                    title="Probabilidades de Attrition",
+                    color='Color',
+                    color_discrete_map={'#5A8FC8': '#5A8FC8', '#C85A5A': '#C85A5A'},
+                    text='Probabilidad'
+                )
+                fig_prob.update_traces(texttemplate='%{text:.1%}', textposition='outside')
+                fig_prob.update_layout(
+                    showlegend=False, 
+                    yaxis=dict(range=[0, 1]),
+                    height=300
+                )
+                st.plotly_chart(fig_prob, use_container_width=True)
+            
+            # Recomendaciones basadas en el riesgo
+            st.subheader("Recomendaciones")
+            
+            risk_level = result['probability_yes']
+            
+            if risk_level > 0.7:
+                st.error("""
+                **RIESGO CRÍTICO (>70%)**
+                - **Acción inmediata requerida**
+                - Revisar compensación y beneficios urgentemente
+                - Evaluar carga de trabajo y balance vida-trabajo
+                - Programar reunión one-on-one inmediata con el manager
+                - Considerar promoción o cambio de rol
+                - Implementar plan de retención personalizado
+                """)
+            elif risk_level > 0.5:
+                st.warning("""
+                **RIESGO ALTO (50-70%)**
+                - Monitorear de cerca y tomar medidas preventivas
+                - Evaluar oportunidades de desarrollo profesional
+                - Revisar satisfacción laboral y environment
+                - Considerar ajustes en responsabilidades o team
+                - Planificar career path claro
+                """)
+            elif risk_level > 0.3:
+                st.info("""
+                **RIESGO MODERADO (30-50%)**
+                - Monitorear satisfacción laboral regularmente
+                - Mantener comunicación abierta con el empleado
+                - Evaluar oportunidades de crecimiento a mediano plazo
+                - Considerar para proyectos de desarrollo
+                """)
+            else:
+                st.success("""
+                **RIESGO BAJO (<30%)**
+                - Empleado estable, continuar con seguimiento regular
+                - Considerar como mentor para otros empleados
+                - Evaluar para roles de mayor responsabilidad
+                - Potencial candidato para leadership development
+                """)
+                
+            # Factores de riesgo identificados
+            st.subheader("🎯 Factores de Riesgo Detectados")
+            risk_factors = []
+            
+            if overtime == "Yes":
+                risk_factors.append("🔴 Trabajo con horas extra")
+            if business_travel in ["Travel_Frequently"]:
+                risk_factors.append("🔴 Viajes frecuentes")
+            elif business_travel == "Travel_Rarely":
+                risk_factors.append("🟡 Viajes ocasionales")
+            if years_at_company < 2:
+                risk_factors.append("🟡 Empleado relativamente nuevo")
+            if monthly_income < 3000:
+                risk_factors.append("🟡 Salario por debajo del promedio")
+            
+            if risk_factors:
+                for factor in risk_factors:
+                    st.write(f"• {factor}")
+            else:
+                st.write("• ✅ No se detectaron factores de riesgo importantes")
+
+else:
+    st.warning("⚠️ No se pudo cargar el modelo de predicción. Verifica que el archivo del modelo esté disponible.")
+
+
+
 
 # Footer
 st.markdown("---")
